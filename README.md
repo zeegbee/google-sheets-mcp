@@ -163,6 +163,19 @@ GOOGLE_SERVICE_ACCOUNT_FILE=/path/to/service_account.json \
 - «Прочитай лист "Продажи" из https://docs.google.com/spreadsheets/d/... и посчитай итог»
 - «Добавь в конец строку: 2026-10-01, Кофе, 350»
 
+## Веб-интерфейс
+
+В [examples/web-viewer](examples/web-viewer) — пример веб-интерфейса для просмотра таблиц
+в браузере. Он подключается к этому серверу как MCP-клиент (локально или через Docker):
+
+```bash
+cd examples/web-viewer
+../../.venv/bin/python app.py            # Windows: ..\..\.venv\Scripts\python app.py
+../../.venv/bin/python app.py --docker   # сервер в Docker-образе google-sheets-mcp
+```
+
+Подробности — в [README примера](examples/web-viewer/README.md).
+
 ## Структура проекта
 
 ```
@@ -170,7 +183,8 @@ GOOGLE_SERVICE_ACCOUNT_FILE=/path/to/service_account.json \
 ├── requirements.txt       # зависимости
 ├── Dockerfile
 ├── tests/smoke_test.py    # smoke-тест по протоколу MCP
-├── .github/workflows/     # CI: тесты на Python 3.10 и 3.13 + сборка Docker-образа
+├── examples/web-viewer/   # пример: веб-интерфейс на MCP-клиенте
+├── .github/workflows/     # CI: тесты на Python 3.10 и 3.13, Docker-образ, веб-интерфейс
 └── .env.example           # пример переменных окружения
 ```
 

@@ -25,3 +25,15 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t google-sheets-mcp .
       - run: python3 tests/smoke_test.py docker run -i --rm google-sheets-mcp
+
+  web-viewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt -r examples/web-viewer/requirements.txt
+      - run: python examples/web-viewer/tests/smoke_test.py
+      - run: docker build -t google-sheets-mcp .
+      - run: python examples/web-viewer/tests/smoke_test.py --docker

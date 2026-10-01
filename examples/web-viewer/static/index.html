@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sheets Viewer</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2228; --muted: #6b7480;
+    --border: #e1e4e8; --head: #f0f2f5; --hover: #eef4ff; --accent: #1a73e8;
+    --accent-soft: #e8f0fe; --error-bg: #fdecea; --error: #b3261e; --zebra: #fafbfc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181c; --panel: #1d2126; --text: #e6e8eb; --muted: #9aa3ad;
+      --border: #2e343b; --head: #252a30; --hover: #24303f; --accent: #8ab4f8;
+      --accent-soft: #1f2d42; --error-bg: #3b1f1d; --error: #f2b8b5; --zebra: #1a1e22;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100vh; display: grid; grid-template-columns: 280px 1fr;
+  }
+  button, input { font: inherit; color: inherit; }
+  input[type=text], input[type=search] {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--panel); outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  button {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel); cursor: pointer; white-space: nowrap;
+  }
+  button:hover { background: var(--hover); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { button.primary { color: #10213a; } }
+
+  aside {
+    border-right: 1px solid var(--border); background: var(--panel);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  aside header { padding: 16px; border-bottom: 1px solid var(--border); }
+  aside h1 { font-size: 16px; margin: 0 0 12px; }
+  .badge {
+    font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); vertical-align: middle;
+  }
+  #fileList { list-style: none; margin: 0; padding: 8px; overflow: auto; flex: 1; }
+  #fileList li {
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #fileList li:hover { background: var(--hover); }
+  #fileList li.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  #fileList .hint { color: var(--muted); cursor: default; white-space: normal; }
+  #fileList .hint:hover { background: none; }
+
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .toolbar {
+    display: flex; gap: 8px; padding: 12px 16px; align-items: center; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  .toolbar .grow { flex: 1; min-width: 200px; }
+  .title-row { display: flex; align-items: baseline; gap: 12px; padding: 14px 16px 0; }
+  .title-row h2 { margin: 0; font-size: 18px; }
+  .title-row a { color: var(--accent); text-decoration: none; font-size: 13px; }
+  .tabs { display: flex; gap: 4px; padding: 10px 16px 0; overflow-x: auto; }
+  .tab {
+    border-radius: 8px 8px 0 0; border-bottom: none; padding: 6px 14px;
+    color: var(--muted);
+  }
+  .tab.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft); font-weight: 600; }
+  .tab small { opacity: .7; margin-left: 4px; }
+  .controls {
+    display: flex; gap: 8px; padding: 10px 16px; align-items: center; flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+  }
+  .controls input[type=text], .controls input[type=search] { width: 180px; }
+  .controls label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+  .status { color: var(--muted); margin-left: auto; font-size: 13px; }
+
+  .error {
+    margin: 12px 16px 0; padding: 10px 14px; border-radius: 8px;
+    background: var(--error-bg); color: var(--error); white-space: pre-wrap;
+  }
+  .wrap { flex: 1; overflow: auto; margin: 0 16px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+  .empty { padding: 48px; text-align: center; color: var(--muted); }
+  table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+  th, td {
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 6px 10px; text-align: left; vertical-align: top;
+    max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  thead th {
+    position: sticky; top: 0; z-index: 2; background: var(--head);
+    font-weight: 600; cursor: pointer; user-select: none;
+  }
+  thead th .col { display: block; font-weight: 400; font-size: 11px; color: var(--muted); }
+  thead th.sorted { color: var(--accent); }
+  th.rn, td.rn {
+    position: sticky; left: 0; z-index: 1; background: var(--head);
+    color: var(--muted); text-align: right; font-size: 12px; min-width: 44px; cursor: default;
+  }
+  thead th.rn { z-index: 3; }
+  tbody tr:nth-child(even) td:not(.rn) { background: var(--zebra); }
+  tbody tr:hover td:not(.rn) { background: var(--hover); }
+  td:hover { white-space: pre-wrap; overflow-wrap: anywhere; }
+  mark { background: #ffe58f; color: inherit; border-radius: 2px; }
+  @media (prefers-color-scheme: dark) { mark { background: #6b5a12; } }
+
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100vh; }
+    aside { border-right: none; border-bottom: 1px solid var(--border); max-height: 40vh; }
+    .wrap { max-height: 70vh; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1>📊 Google Таблицы <span id="mode" class="badge" hidden></span></h1>
+    <input id="fileFilter" type="search" placeholder="Фильтр по названию">
+  </header>
+  <ul id="fileList"><li class="hint">Загрузка…</li></ul>
+</aside>
+
+<main>
+  <form class="toolbar" id="openForm">
+    <input class="grow" id="openInput" type="text" placeholder="Ссылка или ID таблицы">
+    <button class="primary" type="submit">Открыть</button>
+  </form>
+
+  <div id="error" class="error" hidden></div>
+
+  <div id="sheetView" hidden>
+    <div class="title-row">
+      <h2 id="title"></h2>
+      <a id="openLink" target="_blank" rel="noopener">Открыть в Google ↗</a>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="controls">
+      <input id="rangeInput" type="text" placeholder="Диапазон, напр. A1:F50">
+      <button id="reloadBtn" type="button">⟳ Обновить</button>
+      <label><input id="headerToggle" type="checkbox" checked> Первая строка — заголовки</label>
+      <label><input id="formulasToggle" type="checkbox"> Формулы</label>
+      <input id="search" type="search" placeholder="Поиск в таблице">
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+
+  <div class="wrap" id="tableWrap">
+    <div class="empty">Выберите таблицу слева или вставьте ссылку сверху</div>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = {
+  files: [], spreadsheet: null, info: null, sheet: null,
+  rows: [], sortCol: null, sortDir: 1, startRow: 1, startCol: 0,
+};
+
+async function api(path, params = {}) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== ""));
+  const res = await fetch(`/api/${path}?${qs}`);
+  const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok || body.error) throw new Error(body.error || `HTTP ${res.status}`);
+  return body.data;
+}
+
+function showError(err) {
+  $("error").hidden = !err;
+  $("error").textContent = err ? String(err.message || err) : "";
+}
+
+function setStatus(text) { $("status").textContent = text; }
+
+function colLetter(i) {
+  let s = "";
+  for (i++; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s;
+  return s;
+}
+
+function colIndex(letters) {
+  return [...letters.toUpperCase()].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+}
+
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---------- список таблиц
+
+async function loadFiles() {
+  try {
+    state.files = await api("spreadsheets");
+    renderFiles();
+  } catch (e) {
+    $("fileList").innerHTML = `<li class="hint">Не удалось получить список: ${escapeHtml(e.message)}</li>`;
+  }
+}
+
+function renderFiles() {
+  const q = $("fileFilter").value.trim().toLowerCase();
+  const files = state.files.filter((f) => f.name.toLowerCase().includes(q));
+  const list = $("fileList");
+  if (!files.length) {
+    list.innerHTML = `<li class="hint">${state.files.length ? "Ничего не найдено" :
+      "Нет доступных таблиц. Откройте доступ к таблице для email сервисного аккаунта."}</li>`;
+    return;
+  }
+  list.innerHTML = "";
+  for (const f of files) {
+    const li = document.createElement("li");
+    li.textContent = f.name;
+    li.title = f.name;
+    li.classList.toggle("active", f.id === state.info?.id);
+    li.onclick = () => openSpreadsheet(f.id);
+    list.appendChild(li);
+  }
+}
+
+// ---------- таблица и листы
+
+async function openSpreadsheet(idOrUrl, sheet) {
+  showError(null);
+  $("tableWrap").innerHTML = `<div class="empty">Загрузка…</div>`;
+  try {
+    const info = await api("info", { spreadsheet: idOrUrl });
+    state.spreadsheet = info.id;
+    state.info = info;
+    $("sheetView").hidden = false;
+    $("title").textContent = info.title;
+    $("openLink").href = info.url;
+    renderFiles();
+    const target = info.sheets.find((s) => s.title === sheet) || info.sheets[0];
+    const url = new URL(location);
+    url.searchParams.set("id", info.id);
+    history.replaceState(null, "", url);
+    await openSheet(target.title);
+  } catch (e) {
+    showError(e);
+    $("tableWrap").innerHTML = `<div class="empty">Не удалось открыть таблицу</div>`;
+  }
+}
+
+function renderTabs() {
+  const tabs = $("tabs");
+  tabs.innerHTML = "";
+  for (const s of state.info.sheets) {
+    const b = document.createElement("button");
+    b.className = "tab" + (s.title === state.sheet ? " active" : "");
+    b.innerHTML = `${escapeHtml(s.title)}<small>${s.rows}×${s.cols}</small>`;
+    b.onclick = () => { $("rangeInput").value = ""; openSheet(s.title); };
+    tabs.appendChild(b);
+  }
+}
+
+async function openSheet(title) {
+  state.sheet = title;
+  state.sortCol = null;
+  renderTabs();
+  const range = $("rangeInput").value.trim();
+  setStatus("Загрузка…");
+  showError(null);
+  const t0 = performance.now();
+  try {
+    state.rows = await api("values", {
+      spreadsheet: state.spreadsheet, sheet: title, range,
+      formulas: $("formulasToggle").checked ? 1 : "",
+    });
+    // Смещение для подписи строк/столбцов, если читали диапазон
+    const m = range.match(/^([A-Za-z]+)?(\d+)?/);
+    state.startCol = m && m[1] ? colIndex(m[1]) : 0;
+    state.startRow = m && m[2] ? +m[2] : 1;
+    renderTable();
+    setStatus(`${state.rows.length} строк · ${Math.round(performance.now() - t0)} мс`);
+  } catch (e) {
+    showError(e);
+    setStatus("");
+    $("tableWrap").innerHTML = `<div class="empty">Нет данных</div>`;
+  }
+}
+
+// ---------- отрисовка
+
+const isNumeric = (v) => v !== "" && /^[-+]?[\d\s ]*[.,]?\d+\s*%?$/.test(v);
+const toNumber = (v) => parseFloat(v.replace(/[\s %]/g, "").replace(",", "."));
+
+function renderTable() {
+  const wrap = $("tableWrap");
+  if (!state.rows.length) {
+    wrap.innerHTML = `<div class="empty">Лист пуст</div>`;
+    return;
+  }
+  const width = Math.max(...state.rows.map((r) => r.length));
+  const pad = (r) => Array.from({ length: width }, (_, i) => r[i] ?? "").map(String);
+  const useHeader = $("headerToggle").checked;
+  const header = useHeader ? pad(state.rows[0]) : null;
+  let body = (useHeader ? state.rows.slice(1) : state.rows)
+    .map((r, i) => ({ n: state.startRow + i + (useHeader ? 1 : 0), cells: pad(r) }));
+
+  const q = $("search").value.trim().toLowerCase();
+  if (q) body = body.filter((r) => r.cells.some((c) => c.toLowerCase().includes(q)));
+
+  if (state.sortCol != null) {
+    const c = state.sortCol, d = state.sortDir;
+    body.sort((a, b) => {
+      const x = a.cells[c], y = b.cells[c];
+      if (x === "" || y === "") return (x === "") - (y === "");
+      if (isNumeric(x) && isNumeric(y)) return (toNumber(x) - toNumber(y)) * d;
+      return x.localeCompare(y, "ru", { numeric: true }) * d;
+    });
+  }
+
+  const hl = (s) => {
+    const safe = escapeHtml(s);
+    if (!q) return safe;
+    const re = new RegExp(escapeHtml(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    return safe.replace(re, (m) => `<mark>${m}</mark>`);
+  };
+
+  let html = "<table><thead><tr><th class='rn'></th>";
+  for (let i = 0; i < width; i++) {
+    const arrow = state.sortCol === i ? (state.sortDir > 0 ? " ▲" : " ▼") : "";
+    const label = header ? escapeHtml(header[i]) : "";
+    html += `<th data-col="${i}" class="${state.sortCol === i ? "sorted" : ""}">` +
+      `<span class="col">${colLetter(state.startCol + i)}${arrow}</span>${label}</th>`;
+  }
+  html += "</tr></thead><tbody>";
+  for (const r of body) {
+    html += `<tr><td class="rn">${r.n}</td>`;
+    for (const c of r.cells) html += `<td class="${isNumeric(c) ? "num" : ""}" title="${escapeHtml(c)}">${hl(c)}</td>`;
+    html += "</tr>";
+  }
+  html += "</tbody></table>";
+  if (!body.length) html += `<div class="empty">Ничего не найдено</div>`;
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll("th[data-col]").forEach((th) => {
+    th.onclick = () => {
+      const c = +th.dataset.col;
+      if (state.sortCol !== c) { state.sortCol = c; state.sortDir = 1; }
+      else if (state.sortDir === 1) state.sortDir = -1;
+      else state.sortCol = null;
+      renderTable();
+    };
+  });
+}
+
+// ---------- события
+
+$("fileFilter").oninput = renderFiles;
+$("openForm").onsubmit = (e) => {
+  e.preventDefault();
+  const v = $("openInput").value.trim();
+  if (v) openSpreadsheet(v);
+};
+$("reloadBtn").onclick = () => state.sheet && openSheet(state.sheet);
+$("rangeInput").onkeydown = (e) => { if (e.key === "Enter") $("reloadBtn").click(); };
+$("formulasToggle").onchange = () => state.sheet && openSheet(state.sheet);
+$("headerToggle").onchange = () => { state.sortCol = null; renderTable(); };
+$("search").oninput = () => state.rows.length && renderTable();
+
+api("status").then(({ mode, image }) => {
+  $("mode").hidden = false;
+  $("mode").textContent = mode === "docker" ? "🐳 docker" : "local";
+  $("mode").title = mode === "docker" ? `MCP-сервер в контейнере ${image}` : "MCP-сервер из локального .venv";
+}).catch(() => {});
+loadFiles();
+const initial = new URLSearchParams(location.search).get("id");
+if (initial) openSpreadsheet(initial);
+</script>
+</body>
+</html>
